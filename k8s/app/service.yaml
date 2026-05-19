@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: linkly
+  namespace: linkly
+  labels:
+    app: linkly
+spec:
+  type: ClusterIP
+  selector:
+    app: linkly
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
