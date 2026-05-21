@@ -18,6 +18,7 @@ spec:
       containers:
         - name: linkly
           image: linkly:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8000
