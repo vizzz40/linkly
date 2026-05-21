@@ -1,7 +1,13 @@
+import logging
+import time
+
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import settings
+
+logger = logging.getLogger("linkly")
 
 connect_args = {}
 if settings.database_url.startswith("sqlite"):
@@ -25,5 +31,13 @@ def get_db():
         db.close()
 
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+def init_db(retries=15, delay=2):
+    for attempt in range(1, retries + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            return
+        except OperationalError:
+            if attempt == retries:
+                raise
+            logger.warning("database not reachable yet, retry %s/%s", attempt, retries)
+            time.sleep(delay)
