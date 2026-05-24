@@ -1,0 +1,4 @@
+prefix     = "linkly"
+location   = "germanywestcentral"
+node_count = 1
+node_size  = "Standard_F2as_v6"
