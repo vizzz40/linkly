@@ -1,0 +1,48 @@
+name: CD
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RESOURCE_GROUP: linkly-rg
+  AKS_NAME: linkly-aks
+  ACR_NAME: linklyacr
+  IMAGE: linkly
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push image to ACR
+        run: |
+          az acr build \
+            --registry "$ACR_NAME" \
+            --image "$IMAGE:${{ github.sha }}" \
+            --image "$IMAGE:latest" \
+            .
+
+      - uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_NAME }}
+
+      - name: Deploy to AKS
+        run: |
+          kubectl apply -f k8s/app -f k8s/postgres
+          kubectl set image deployment/linkly \
+            linkly="${ACR_NAME}.azurecr.io/${IMAGE}:${{ github.sha }}" -n linkly
+          kubectl rollout status deployment/linkly -n linkly --timeout=120s
