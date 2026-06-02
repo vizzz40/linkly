@@ -7,9 +7,7 @@ and ship it through GitHub Actions with metrics in Grafana.
 The app itself is deliberately simple - the point of the project is everything
 *around* the app.
 
-![CI](https://github.com/USERNAME/linkly/actions/workflows/ci.yml/badge.svg)
-
-> Update the badge URL with your own GitHub path once you push this.
+![CI](https://github.com/vizzz40/linkly/actions/workflows/ci.yml/badge.svg)
 
 ## What's in here
 
