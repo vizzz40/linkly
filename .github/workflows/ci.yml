@@ -33,10 +33,8 @@ jobs:
           tags: linkly:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Scan image
-        uses: aquasecurity/trivy-action@v0.29.0
-        with:
-          image-ref: linkly:ci
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: "0"
+      - name: Scan image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.71.0 image --severity HIGH,CRITICAL --exit-code 0 --no-progress linkly:ci
