@@ -1,146 +1,70 @@
 # linkly
 
-A small URL shortener I built to learn the DevOps workflow end to end: write an
-app, containerise it, run it on Kubernetes, provision the cloud with Terraform,
-and ship it through GitHub Actions with metrics in Grafana.
-
-The app itself is deliberately simple - the point of the project is everything
-*around* the app.
-
 ![CI](https://github.com/vizzz40/linkly/actions/workflows/ci.yml/badge.svg)
 
-## What's in here
+A URL shortener I built to practice the whole DevOps workflow end to end, not just
+the app: containers, Kubernetes, Terraform, CI/CD and monitoring.
 
-```
-app/                FastAPI service + tests
-Dockerfile          multi-stage, runs as non-root
-docker-compose.yml  app + postgres + prometheus + grafana for local dev
-k8s/                kubernetes manifests (app, postgres, monitoring)
-terraform/          azure infra (resource group, ACR, AKS)
-monitoring/         prometheus config + grafana dashboard
-.github/workflows/  CI and CD pipelines
-docs/               architecture diagrams
-```
+## Stack
 
-See [docs/architecture.md](docs/architecture.md) for the diagrams.
+- FastAPI + PostgreSQL, Prometheus metrics at `/metrics`
+- Docker (multi-stage, non-root) + docker-compose for local dev
+- Kubernetes manifests: Deployment, Service, HPA, Ingress, Postgres StatefulSet
+- Prometheus + Grafana dashboard
+- Terraform for Azure (AKS + ACR)
+- GitHub Actions for CI and CD
 
-## The API
+Diagrams are in `docs/architecture.md`.
 
-| Method | Path | What it does |
+## API
+
+| Method | Path | Description |
 | --- | --- | --- |
 | POST | `/api/shorten` | create a short code for a URL |
 | GET | `/{code}` | redirect to the original URL |
-| GET | `/api/stats/{code}` | how many times a code was used |
-| GET | `/healthz` | liveness probe |
-| GET | `/readyz` | readiness probe (checks the DB) |
-| GET | `/metrics` | Prometheus metrics |
+| GET | `/api/stats/{code}` | usage count for a code |
+| GET | `/healthz`, `/readyz` | health probes |
+| GET | `/metrics` | prometheus metrics |
 
-```bash
-curl -X POST localhost:8000/api/shorten -H 'content-type: application/json' \
-  -d '{"url": "https://example.com"}'
-```
+## Run locally
 
-## Run it locally
+The whole stack (app + postgres + prometheus + grafana):
 
-Just the app (uses a local sqlite file, no setup):
+    make up
 
-```bash
-make install
-make run
-```
+App on `:8000` (`/docs` for the API), Prometheus on `:9090`, Grafana on `:3000`.
+Tests and linting:
 
-The whole stack with Postgres and monitoring:
+    make test
+    make lint
 
-```bash
-make up
-```
+## Run on Kubernetes (local)
 
-- app: http://localhost:8000
-- prometheus: http://localhost:9090
-- grafana: http://localhost:3000 (dashboard "linkly - service overview")
+    make kind-up
+    make kind-deploy
 
-Run the tests and linter:
+Monitoring uses the kube-prometheus-stack Helm chart; see `k8s/` and the Makefile.
 
-```bash
-make test
-make lint
-```
+## Azure
 
-## Run it on Kubernetes (local)
-
-Needs `kind`, `kubectl`, `helm` and a running Docker.
-
-```bash
-make kind-up
-make kind-deploy
-```
-
-For metrics, install the kube-prometheus-stack and apply the monitoring
-manifests:
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm install monitoring prometheus-community/kube-prometheus-stack -n monitoring --create-namespace
-make monitoring
-```
-
-Then port-forward whatever you want to look at, e.g.:
-
-```bash
-kubectl port-forward -n linkly svc/linkly 8080:80
-```
-
-## Deploy to Azure
-
-Full steps and cost notes are in [terraform/README.md](terraform/README.md).
-Short version:
-
-```bash
-cd terraform
-terraform init -backend-config=backend.hcl
-terraform apply
-$(terraform output -raw get_credentials_command)
-```
-
-### GitHub Actions to Azure (OIDC)
-
-The CD pipeline logs in with OIDC, so there are no long-lived Azure secrets in
-GitHub. You create an app registration with a federated credential once:
-
-```bash
-az ad app create --display-name linkly-cicd
-# create a service principal for the app, then add a federated credential
-# scoped to your repo (subject: repo:USERNAME/linkly:ref:refs/heads/main),
-# and give it Contributor + AcrPush on the resource group.
-```
-
-Then add these repo secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
-`AZURE_SUBSCRIPTION_ID`. Pushing to `main` builds the image in ACR and rolls it
-out to AKS.
+`terraform/` provisions AKS + ACR (see `terraform/README.md`). The CD workflow
+builds the image to ACR and deploys to AKS using OIDC, so there are no cloud
+secrets stored in GitHub.
 
 ## What I learned
 
-- How liveness vs readiness probes actually differ, and why checking the DB in
-  liveness is a bad idea (a DB blip would get healthy pods killed).
-- Multi-stage Docker builds and why running as a non-root user matters.
-- Keeping Prometheus label cardinality under control - bucketing every short
-  code under `/{code}` instead of one series per code.
-- Terraform remote state, and why you don't want the state file on one laptop.
-- Federated (OIDC) auth from GitHub Actions instead of storing cloud secrets.
-
-## Things I'd add next
-
-- Alembic migrations instead of create_all on startup.
-- Alerting rules in Prometheus (right now it's just dashboards).
-- Move secrets to Azure Key Vault via the CSI driver instead of a committed
-  Secret manifest.
-- A small frontend instead of curl.
-- More tests, especially around code collisions and DB failure paths.
+- liveness vs readiness probes, and why checking the DB in liveness is a bad idea
+- keeping Prometheus label cardinality under control
+- Terraform remote state, and why you don't keep state on one laptop
+- OIDC auth from GitHub Actions instead of storing cloud secrets
 
 ## Known limitations
 
-- The Kubernetes Secret in `k8s/app/secret.yaml` holds demo credentials in
-  plain text. Fine for a local demo, not for anything real - see the Key Vault
-  note above.
-- Postgres runs in-cluster on a single replica with a PVC. It keeps Azure costs
-  down but it's not highly available.
+- the Kubernetes Secret holds demo credentials in plain text; real use should be a secrets manager
+- Postgres runs in-cluster on a single replica, so it isn't highly available
+
+## Next steps
+
+- Alembic migrations instead of create_all on startup
+- Prometheus alert rules, not just dashboards
+- move secrets to Azure Key Vault
