@@ -1,4 +1,4 @@
-# runtime dependencies (pinned so builds are reproducible)
+# runtime dependencies
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
 gunicorn==23.0.0
